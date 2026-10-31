@@ -1,0 +1,16 @@
+# Runtime records and local-only evidence never belong in this repository.
+.audit/
+.env
+.env.*
+*.pem
+*.key
+*.sqlite
+*.sqlite3
+*.sqlite3-*
+*.db
+*.db-*
+__pycache__/
+*.py[cod]
+node_modules/
+.venv/
+venv/

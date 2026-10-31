@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="en"><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self' 'unsafe-inline'; style-src 'unsafe-inline'; media-src blob:; frame-src data:; connect-src 'none'"><title>Local playback verification</title>
+<style>body{font:18px system-ui;margin:40px;color:#173326;background:#f3f7f3}video{width:320px}pre{white-space:pre-wrap}</style>
+<h1>Synthetic playback verification</h1><p>No extension, real browsing, or collection. Video generated in this page.</p><button id="start">Run checks</button><pre id="result">Not run</pre><video muted playsinline></video>
+<script src="../../chrome-extension/playback.js"></script>
+<script>
+const result=document.querySelector('#result'), video=document.querySelector('video');
+document.querySelector('#start').onclick=async()=>{
+  const passed=[]; let stream, timer;
+  const check=(condition,label)=>{if(!condition)throw new Error(label);passed.push(label);};
+  try{
+    const read=createPlaybackReader();
+    check(read(document)==='not-playing','paused video');
+    const canvas=document.createElement('canvas');canvas.width=160;canvas.height=90;
+    const ctx=canvas.getContext('2d');let frame=0;
+    timer=setInterval(()=>{ctx.fillStyle=frame++%2?'#30a06d':'#3050a0';ctx.fillRect(0,0,160,90);},40);
+    stream=canvas.captureStream(25);video.srcObject=stream;await video.play();
+    read(document);
+    await new Promise(resolve=>setTimeout(resolve,400));
+    check(read(document)==='playing','real HTML video advancing');
+    video.pause();check(read(document)==='not-playing','paused after playback');
+    const iframe=document.createElement('iframe');iframe.src='data:text/html,opaque test';
+    await new Promise(resolve=>{iframe.onload=resolve;document.body.append(iframe);});
+    check(read(document)==='unknown','inaccessible frame is unknown');iframe.remove();
+    result.textContent='PASS '+passed.length+' checks\n'+passed.join('\n');
+    document.body.dataset.verdict='pass';
+  }catch(error){result.textContent='FAIL '+error.message;document.body.dataset.verdict='fail';}
+  finally{clearInterval(timer);stream?.getTracks().forEach(track=>track.stop());video.srcObject=null;}
+};
+</script></html>

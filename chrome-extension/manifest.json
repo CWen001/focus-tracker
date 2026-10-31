@@ -1,0 +1,29 @@
+{
+  "manifest_version": 3,
+  "name": "Local Distraction Tracker",
+  "version": "0.1.0",
+  "description": "Foreground tab metadata and video state to this device only.",
+  "permissions": [
+    "tabs",
+    "nativeMessaging"
+  ],
+  "background": {
+    "service_worker": "background.mjs",
+    "type": "module"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "http://*/*",
+        "https://*/*"
+      ],
+      "js": [
+        "playback.js",
+        "content.js"
+      ],
+      "all_frames": false,
+      "run_at": "document_idle"
+    }
+  ],
+  "incognito": "not_allowed"
+}
