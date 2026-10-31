@@ -1,5 +1,6 @@
 """Read-only diagnostics/status and explicitly authorized local collection."""
 import argparse
+import ctypes
 from dataclasses import dataclass
 import os
 from pathlib import Path
@@ -32,7 +33,15 @@ def data_path_check(path: Path | None) -> Check:
     if os.name == "nt" and any(":" in part for part in path.parts[1:]):
         return Check("UNKNOWN", "DATA_PATH_UNSAFE", "Special path syntax is not supported.")
     try:
+        if os.name == "nt":
+            drive_type = ctypes.WinDLL("kernel32", use_last_error=True).GetDriveTypeW
+            drive_type.argtypes = [ctypes.c_wchar_p]
+            drive_type.restype = ctypes.c_uint
+            if drive_type(path.anchor) not in (2, 3, 5, 6):
+                return Check("UNKNOWN", "DATA_PATH_UNSAFE", "A known local drive is required.")
         resolved = path.resolve()
+        if str(resolved).startswith((chr(92)*2, "//")):
+            return Check("UNKNOWN", "DATA_PATH_UNSAFE", "Resolved network paths are not allowed.")
         if resolved == PROJECT_ROOT or PROJECT_ROOT in resolved.parents:
             return Check("UNKNOWN", "DATA_PATH_PROJECT", "Activity data must stay outside source.")
         cloud_roots = [os.environ.get(key) for key in

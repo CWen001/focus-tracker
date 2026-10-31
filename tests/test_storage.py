@@ -79,6 +79,29 @@ class StorageTests(unittest.TestCase):
             with self.assertRaises(StorageError): status(self.path)
         self.assertEqual(self.path.read_bytes(),before)
 
+    def test_status_keeps_one_snapshot_during_concurrent_commit(self):
+        import sqlite3
+        from unittest.mock import patch
+        connect = sqlite3.connect
+        with Store(self.path) as writer:
+            writer.connection.execute('PRAGMA journal_mode=WAL')
+            writer.commit('before', self.segments, self.checkpoint)
+            revised = [replace(self.segments[0], revision=2, end=2, utc_end=1002, state='idle')]
+            checkpoint = dict(self.checkpoint, utc=1002, at=2)
+
+            class InterleavedConnection(sqlite3.Connection):
+                def execute(self, sql, *args, **kwargs):
+                    if sql == 'SELECT payload FROM segments':
+                        writer.commit('during-read', revised, checkpoint)
+                    return super().execute(sql, *args, **kwargs)
+
+            with patch('activity_log.storage.sqlite3.connect',
+                       side_effect=lambda *a, **kw: connect(*a, **kw, factory=InterleavedConnection)):
+                snapshot = status(self.path)
+            self.assertEqual(snapshot['checkpoint'], self.checkpoint)
+            self.assertEqual(snapshot['durations'], {'pending': 1.0})
+            self.assertEqual(status(self.path)['durations'], {'idle': 2.0})
+
     def test_conflicting_equal_revision_rolls_back(self):
         with Store(self.path) as store:
             store.commit('c1',self.segments,self.checkpoint)

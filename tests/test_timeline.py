@@ -42,6 +42,16 @@ class TimelineTests(unittest.TestCase):
         self.assertEqual(duration(timeline,'unknown'),300)
         self.assertEqual(duration(timeline,'idle'),0)
 
+    def test_mixed_candidate_keeps_unknown_parts_unknown(self):
+        timeline = Timeline('mixed')
+        advance(timeline, 0, 298, playback='unknown')
+        advance(timeline, 299, 300, playback='not-playing')
+        self.assertEqual(duration(timeline, 'unknown'), 299)
+        self.assertEqual(duration(timeline, 'idle'), 1)
+        timeline.observe(replace(obs(301), idle=0))
+        self.assertEqual(duration(timeline, 'unknown'), 299)
+        self.assertEqual(duration(timeline, 'idle'), 1)
+
     def test_input_finalizes_short_candidate(self):
         timeline=Timeline('a')
         advance(timeline,0,20)

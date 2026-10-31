@@ -113,6 +113,7 @@ def status(path):
     try:
         connection = sqlite3.connect(path.resolve().as_uri()+'?mode=ro', uri=True)
         connection.execute('PRAGMA query_only=ON')
+        connection.execute('BEGIN')
         check_schema(connection)
         row = connection.execute('SELECT payload FROM checkpoint WHERE id=1').fetchone()
         totals = {}

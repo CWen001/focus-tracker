@@ -106,6 +106,23 @@ class DiagnosticBoundaryTests(unittest.TestCase):
             result = data_path_check(Path('//example.invalid/share/data'))
         self.assertEqual(result.code, 'DATA_PATH_UNSAFE')
 
+    @unittest.skipUnless(sys.platform == 'win32', 'Windows drive types')
+    def test_remote_or_unknown_drive_is_rejected_before_path_access(self):
+        from unittest.mock import MagicMock
+        for kind in (0, 1, 4):
+            api = MagicMock()
+            api.GetDriveTypeW.return_value = kind
+            with self.subTest(kind=kind), patch('ctypes.WinDLL', return_value=api):
+                with patch.object(Path, 'resolve', side_effect=AssertionError('remote access attempted')):
+                    result = data_path_check(Path('Z:/records'))
+                self.assertEqual(result.code, 'DATA_PATH_UNSAFE')
+                api.GetDriveTypeW.assert_called_once_with('Z:' + chr(92))
+
+    def test_resolved_network_destination_is_rejected(self):
+        with patch.object(Path, 'resolve', return_value=Path('//example.invalid/share/data')):
+            result = data_path_check(Path(tempfile.gettempdir()) / 'records')
+        self.assertEqual(result.code, 'DATA_PATH_UNSAFE')
+
     def test_file_cannot_be_a_data_directory(self):
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / 'file'
