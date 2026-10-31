@@ -52,6 +52,18 @@ class TimelineTests(unittest.TestCase):
         self.assertEqual(duration(timeline, 'unknown'), 299)
         self.assertEqual(duration(timeline, 'idle'), 1)
 
+    def test_input_query_failure_at_threshold_preserves_pending(self):
+        timeline = Timeline('input-failure')
+        advance(timeline, 0, 299)
+        timeline.observe(replace(obs(300), idle=None))
+        self.assertEqual(duration(timeline, 'idle'), 0)
+        self.assertEqual(duration(timeline, 'pending'), 299)
+        self.assertEqual(duration(timeline, 'unknown'), 1)
+        timeline.observe(replace(obs(301), idle=1500))
+        self.assertEqual(duration(timeline, 'idle'), 0)
+        self.assertEqual(duration(timeline, 'pending'), 299)
+        self.assertEqual(duration(timeline, 'unknown'), 2)
+
     def test_input_finalizes_short_candidate(self):
         timeline=Timeline('a')
         advance(timeline,0,20)

@@ -113,6 +113,9 @@ class Timeline:
             state = 'activity'
             self._settle('activity')
             self._break_candidate()
+        elif current.idle is None:
+            state = 'unknown'
+            self._break_candidate()
         elif new_input:
             state = 'activity'
             self._settle('activity')
