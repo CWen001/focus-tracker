@@ -10,7 +10,7 @@ import time
 import unittest
 from unittest.mock import patch, MagicMock
 
-from tools.verify_lifecycle import enable_ctrl_c, read_snapshot, require_no_browser_host
+from tools.verify_lifecycle import check_stopped, enable_ctrl_c, read_snapshot, require_no_browser_host
 
 
 class VerificationTests(unittest.TestCase):
@@ -88,6 +88,15 @@ class VerificationTests(unittest.TestCase):
         with patch('winreg.OpenKey', side_effect=FileNotFoundError()) as opened:
             require_no_browser_host()
             self.assertEqual(opened.call_count, 4)
+
+    def test_stop_cannot_discard_live_foreground_records(self):
+        live = {'checkpoint': {'session': 'current', 'stopped': False}, 'current_foreground_segments': 2}
+        stopped = {'checkpoint': {'session': 'current', 'stopped': True},
+                   'current_foreground_segments': 0, 'sessions': 1, 'rows': {}}
+        with self.assertRaisesRegex(RuntimeError, 'Foreground records did not survive'):
+            check_stopped(live, stopped, 0)
+        stopped['current_foreground_segments'] = 2
+        check_stopped(live, stopped, 0)
 
     def test_old_foreground_records_do_not_validate_new_unknown_session(self):
         with tempfile.TemporaryDirectory() as directory:

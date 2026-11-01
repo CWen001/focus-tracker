@@ -41,6 +41,13 @@ def read_snapshot(path):
             'seconds': sum(s['end'] - s['start'] for s in segments)}
 
 
+def check_stopped(live, stopped, cycle):
+    require(stopped['checkpoint']['stopped'] is True, 'Stopped checkpoint not saved')
+    require(stopped['checkpoint']['session'] == live['checkpoint']['session'], 'Wrong session stopped')
+    require(stopped['sessions'] == cycle + 1, 'Unexpected session count')
+    require(stopped['current_foreground_segments'] > 0, 'Foreground records did not survive Ctrl+C')
+
+
 def own_job():
     class Limits(ctypes.Structure):
         _fields_ = [('per_process', ctypes.c_int64), ('per_job', ctypes.c_int64),
@@ -213,9 +220,7 @@ def main(argv=None):
                 exit_code = process.wait(timeout=5)
             require(exit_code == 130 and 'STOPPED Saved' in output.read_text(encoding='utf-8'), 'Graceful stop failed')
             stopped = read_snapshot(database)
-            require(stopped['checkpoint']['stopped'] is True, 'Stopped checkpoint not saved')
-            require(stopped['checkpoint']['session'] == live['checkpoint']['session'], 'Wrong session stopped')
-            require(stopped['sessions'] == cycle + 1, 'Unexpected session count')
+            check_stopped(live, stopped, cycle)
             status()
             if previous:
                 require(stopped['checkpoint']['session'] != previous['checkpoint']['session'], 'Restart reused a session')
