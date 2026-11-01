@@ -90,12 +90,25 @@ class VerificationTests(unittest.TestCase):
             self.assertEqual(opened.call_count, 4)
 
     def test_stop_cannot_discard_live_foreground_records(self):
-        live = {'checkpoint': {'session': 'current', 'stopped': False}, 'current_foreground_segments': 2}
+        live = {'checkpoint': {'session': 'current', 'stopped': False}, 'current_foreground_segments': 2,
+                'rows': {'current:1': 'first', 'current:2': 'second'}}
         stopped = {'checkpoint': {'session': 'current', 'stopped': True},
                    'current_foreground_segments': 0, 'sessions': 1, 'rows': {}}
         with self.assertRaisesRegex(RuntimeError, 'Foreground records did not survive'):
             check_stopped(live, stopped, 0)
         stopped['current_foreground_segments'] = 2
+        stopped['rows'] = live['rows'].copy()
+        check_stopped(live, stopped, 0)
+
+    def test_stop_preserves_all_live_row_ids_but_allows_payload_revisions(self):
+        live = {'checkpoint': {'session': 'current', 'stopped': False}, 'current_foreground_segments': 2,
+                'rows': {'current:1': 'first', 'current:2': 'second'}}
+        stopped = {'checkpoint': {'session': 'current', 'stopped': True}, 'sessions': 1,
+                   'current_foreground_segments': 1, 'rows': {'current:1': 'first'}}
+        with self.assertRaisesRegex(RuntimeError, 'Checkpointed rows did not survive'):
+            check_stopped(live, stopped, 0)
+        stopped['rows'].update({'current:2': 'revised', 'current:3': 'new'})
+        stopped['current_foreground_segments'] = 3
         check_stopped(live, stopped, 0)
 
     def test_old_foreground_records_do_not_validate_new_unknown_session(self):
