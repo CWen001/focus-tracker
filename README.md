@@ -52,4 +52,6 @@ python -B -m tools.verify_lifecycle --allow-observation
 
 `activity_log/` 实现 CLI、Windows 观察、时间线、SQLite 和本地管道。`chrome-extension/` 提供前台页面身份和媒体状态。`tools/` 包含受授权控制的安装、原生消息桥、探测与字段审计。`tests/` 是自动测试及本地浏览器夹具。
 
+[工厂离线规则验证](docs/factory-probe.md) 检查领取去重、授权和三轮返修限制，不启动自动工厂。
+
 [验证范围](docs/verification.md) 区分可复跑检查和未完成的系统验收。本仓库不包含个人活动历史、私有任务记录或原始代理会话。
