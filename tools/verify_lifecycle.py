@@ -46,6 +46,7 @@ def check_stopped(live, stopped, cycle):
     require(stopped['checkpoint']['session'] == live['checkpoint']['session'], 'Wrong session stopped')
     require(stopped['sessions'] == cycle + 1, 'Unexpected session count')
     require(stopped['current_foreground_segments'] > 0, 'Foreground records did not survive Ctrl+C')
+    require(live['rows'].keys() <= stopped['rows'].keys(), 'Checkpointed rows did not survive Ctrl+C')
 
 
 def own_job():
