@@ -182,7 +182,7 @@ def main(argv=None):
     try:
         own_job()
         enable_ctrl_c()
-        report['base_sha'] = subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=ROOT, text=True).strip()
+        report['base_sha'] = subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=ROOT, text=True, timeout=5).strip()
         report['source_hashes'] = {str(p.relative_to(ROOT)): hashlib.sha256(p.read_bytes()).hexdigest()
                                    for directory in ('activity_log', 'tools') for p in sorted((ROOT / directory).glob('*.py'))}
         before = command([sys.executable, '-B', '-m', 'activity_log', 'status', '--data-dir', str(data)])

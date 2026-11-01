@@ -10,10 +10,32 @@ import time
 import unittest
 from unittest.mock import patch, MagicMock
 
-from tools.verify_lifecycle import check_stopped, enable_ctrl_c, read_snapshot, require_no_browser_host
+from tools.verify_lifecycle import check_stopped, enable_ctrl_c, main, read_snapshot, require_no_browser_host
 
 
 class VerificationTests(unittest.TestCase):
+    @unittest.skipUnless(sys.platform == 'win32', 'Windows verification entry')
+    def test_git_timeout_records_failure_without_starting_collection(self):
+        with tempfile.TemporaryDirectory() as directory:
+            with patch.dict('os.environ', {'LOCALAPPDATA': directory}), \
+                    patch('tools.verify_lifecycle.require_no_browser_host'), \
+                    patch('activity_log.__main__.data_path_check', return_value=MagicMock(state='OK')), \
+                    patch('tools.verify_lifecycle.own_job'), \
+                    patch('tools.verify_lifecycle.enable_ctrl_c'), \
+                    patch('tools.verify_lifecycle.subprocess.check_output',
+                          side_effect=subprocess.TimeoutExpired('git', 5)) as git, \
+                    patch('tools.verify_lifecycle.subprocess.Popen') as launch:
+                self.assertEqual(main(['--allow-observation']), 1)
+            self.assertEqual(git.call_args.kwargs.get('timeout'), 5)
+            launch.assert_not_called()
+            reports = list(Path(directory).glob('FocusTracker-verify-*/result.json'))
+            self.assertEqual(len(reports), 1)
+            report = json.loads(reports[0].read_text())
+            self.assertEqual(report['verdict'], 'FAIL')
+            self.assertTrue(report['all_owned_exited'])
+            self.assertEqual(report['cycles'], [])
+            self.assertIn('timed out', report['error'])
+
     def test_command_requires_consent_before_creating_artifacts(self):
         result = subprocess.run([sys.executable, '-B', '-m', 'tools.verify_lifecycle'],
                                 capture_output=True, text=True, timeout=10)
