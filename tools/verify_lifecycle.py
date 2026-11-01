@@ -30,11 +30,67 @@ def read_snapshot(path):
         rows = db.execute('SELECT id,payload FROM segments').fetchall()
         sessions = db.execute('SELECT COUNT(*) FROM sessions').fetchone()[0]
     segments = [json.loads(payload) for _, payload in rows]
-    return {'checkpoint': json.loads(checkpoint[0]) if checkpoint else None,
+    checkpoint = json.loads(checkpoint[0]) if checkpoint else None
+    current = checkpoint['session'] + ':' if checkpoint else None
+    return {'checkpoint': checkpoint,
+            'current_foreground_segments': sum(key.startswith(current) and segment.get('app') is not None
+                                               for (key, _), segment in zip(rows, segments)) if current else 0,
             'rows': {key: hashlib.sha256(payload.encode()).hexdigest() for key, payload in rows},
             'sessions': sessions,
             'foreground_segments': sum(s.get('app') is not None for s in segments),
             'seconds': sum(s['end'] - s['start'] for s in segments)}
+
+
+def own_job():
+    class Limits(ctypes.Structure):
+        _fields_ = [('per_process', ctypes.c_int64), ('per_job', ctypes.c_int64),
+                    ('flags', wintypes.DWORD), ('min_working', ctypes.c_size_t),
+                    ('max_working', ctypes.c_size_t), ('active', wintypes.DWORD),
+                    ('affinity', ctypes.c_size_t), ('priority', wintypes.DWORD), ('scheduling', wintypes.DWORD)]
+
+    class ExtendedLimits(ctypes.Structure):
+        _fields_ = [('basic', Limits), ('io', ctypes.c_uint64 * 6),
+                    ('process_memory', ctypes.c_size_t), ('job_memory', ctypes.c_size_t),
+                    ('peak_process', ctypes.c_size_t), ('peak_job', ctypes.c_size_t)]
+
+    kernel = ctypes.WinDLL('kernel32', use_last_error=True)
+    kernel.CreateJobObjectW.argtypes = [ctypes.c_void_p, wintypes.LPCWSTR]
+    kernel.CreateJobObjectW.restype = wintypes.HANDLE
+    kernel.SetInformationJobObject.argtypes = [wintypes.HANDLE, ctypes.c_int, ctypes.c_void_p, wintypes.DWORD]
+    kernel.SetInformationJobObject.restype = wintypes.BOOL
+    kernel.GetCurrentProcess.argtypes = []
+    kernel.GetCurrentProcess.restype = wintypes.HANDLE
+    kernel.AssignProcessToJobObject.argtypes = [wintypes.HANDLE, wintypes.HANDLE]
+    kernel.AssignProcessToJobObject.restype = wintypes.BOOL
+    kernel.CloseHandle.argtypes = [wintypes.HANDLE]
+    kernel.CloseHandle.restype = wintypes.BOOL
+    job = kernel.CreateJobObjectW(None, None)
+    require(job, 'Cannot create lifecycle job')
+    limits = ExtendedLimits()
+    limits.basic.flags = 0x2000  # Kill descendants when the driver's non-inherited handle closes.
+    try:
+        require(kernel.SetInformationJobObject(job, 9, ctypes.byref(limits), ctypes.sizeof(limits)), 'Cannot set job limit')
+        require(kernel.AssignProcessToJobObject(job, kernel.GetCurrentProcess()), 'Cannot protect driver descendants')
+    except BaseException:
+        kernel.CloseHandle(job)
+        raise
+    # Keep this handle open until OS process teardown; closing it would also terminate the driver.
+    return job
+
+
+def require_no_browser_host():
+    import winreg
+    from activity_log.__main__ import HOST_NAME
+    key = r'Software\Google\Chrome\NativeMessagingHosts' + chr(92) + HOST_NAME
+    for root in (winreg.HKEY_CURRENT_USER, winreg.HKEY_LOCAL_MACHINE):
+        for view in (winreg.KEY_WOW64_32KEY, winreg.KEY_WOW64_64KEY):
+            try:
+                with winreg.OpenKey(root, key, 0, winreg.KEY_READ | view):
+                    raise RuntimeError('Registered Chrome host exists; preserve it and stop this recipe')
+            except FileNotFoundError:
+                continue
+            except OSError as error:
+                raise RuntimeError('Cannot inspect all Chrome host registrations') from error
 
 
 def enable_ctrl_c():
@@ -76,9 +132,8 @@ def main(argv=None):
     if sys.platform != 'win32':
         print('ERROR WINDOWS_REQUIRED', file=sys.stderr)
         return 2
-    from activity_log.__main__ import data_path_check, host_check
-    require(host_check().code == 'HOST_NOT_CONFIGURED',
-            'This recipe requires no registered Chrome host; do not remove an existing installation')
+    from activity_log.__main__ import data_path_check
+    require_no_browser_host()
     parent = Path(os.environ['LOCALAPPDATA'])
     require(data_path_check(parent).state == 'OK', 'Unsafe verification root')
     run = Path(tempfile.mkdtemp(prefix='FocusTracker-verify-', dir=parent))
@@ -117,6 +172,7 @@ def main(argv=None):
 
     timer.start()
     try:
+        own_job()
         enable_ctrl_c()
         report['base_sha'] = subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=ROOT, text=True).strip()
         report['source_hashes'] = {str(p.relative_to(ROOT)): hashlib.sha256(p.read_bytes()).hexdigest()
@@ -127,6 +183,7 @@ def main(argv=None):
         previous = None
         for cycle in range(2):
             require(not timed_out.is_set(), 'Verification deadline exceeded')
+            require_no_browser_host()
             output = run / f'collector-{cycle}.txt'
             startup = subprocess.STARTUPINFO()
             startup.dwFlags |= subprocess.STARTF_USESHOWWINDOW
@@ -148,7 +205,7 @@ def main(argv=None):
                             break
                     time.sleep(.1)
                 require(live['checkpoint']['stopped'] is False, 'Live checkpoint incorrectly stopped')
-                require(live['foreground_segments'] > 0, 'No actual foreground observation saved')
+                require(live['current_foreground_segments'] > 0, 'No foreground observation saved in the current session')
                 helper = command([sys.executable, '-B', '-c',
                                   'from tools.verify_lifecycle import interrupt; import sys; interrupt(int(sys.argv[1]))',
                                   str(process.pid)])

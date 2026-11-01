@@ -15,7 +15,7 @@ Use Windows and Python 3.13+. No dependencies or installation are required. Firs
 python -B -m tools.verify_lifecycle --allow-observation
 ```
 
-The helper launches the real `python -m activity_log run` command twice, each in a private hidden console. Readiness requires a live owned process and a fresh persisted checkpoint, not merely a RUNNING line. No registered Chrome native host may be present for this limited recipe. If one exists, stop rather than uninstall it.
+The helper launches the real `python -m activity_log run` command twice, each in a private hidden console. Readiness requires a live owned process and a fresh persisted checkpoint, not merely a RUNNING line. The helper checks the Chrome host under HKCU and HKLM in both registry views before starting and before each collector. An existing registration or unreadable view blocks this limited recipe. Preserve the installation rather than uninstalling it.
 
 ## Doctor
 
@@ -27,7 +27,7 @@ During the recipe, instance health means the owned process is alive, its new dat
 
 The helper checks empty-directory status without creating data, waits for a checkpoint, sends real Ctrl+C to the owned private console, requires exit 130 and a stopped checkpoint, then reads status. It restarts using the same isolated database and requires a different session and byte-identical hashes of prior segment payloads. Status on the stopped database must not change its bytes.
 
-The helper has a 60-second watchdog and an 18-second readiness limit per cycle. Ordinary unit tests never collect real activity. Run them separately with `python -B -m unittest discover -s tests -v`.
+The helper has a 60-second watchdog and an 18-second readiness limit per cycle. A Windows kill-on-close job binds descendants to the driver's lifetime before any collector starts. Abrupt driver termination is tested using a non-observing child. Ordinary unit tests never collect real activity. Run them separately with `python -B -m unittest discover -s tests -v`.
 
 ## Evidence
 
@@ -37,7 +37,7 @@ The report omits application names and page metadata, but it contains local path
 
 ## Cleanup
 
-The helper stops only processes it started. A normal run uses Ctrl+C. A failure kills remaining owned collectors and records FAIL. It retains evidence and the test database. Afterward verify all_owned_exited and that the reported files still exist. Never kill by executable name, remove another installation, or touch the daily database.
+Each cycle requires foreground records from its own current session, not retained rows from the previous one. The helper stops only processes it started. A normal run uses Ctrl+C. A failure kills remaining owned collectors and records FAIL. It retains evidence and the test database. Afterward verify all_owned_exited and that the reported files still exist. Never kill by executable name, remove another installation, or touch the daily database.
 
 ## Maintenance
 
