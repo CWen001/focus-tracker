@@ -26,6 +26,18 @@ node tests/background.test.mjs
 
 默认数据库位于 `%LOCALAPPDATA%\DistractionTracker\activity.sqlite3`，不能放在源码或同步目录。数据可能包含应用文件名、域名、YouTube 标题和视频 ID。设计上不保存截图、页面正文、按键内容或完整 URL；没有云同步功能。**本地数据库未加密，运行时无外传仍需独立整机验收。**
 
+## 隔离试用采集生命周期
+
+在没有注册 Chrome 原生桥的 Windows 上，明确同意短时读取前台应用名和输入空闲时长后，可以运行：
+
+```text
+python -B -m tools.verify_lifecycle --allow-observation
+```
+
+它在新的本地数据目录中启动、保存、正常停止并重启采集器，核对旧记录仍在。最长 60 秒，到时停止本次进程。结束时显示 PASS 或 FAIL，以及本地 `result.json` 路径。它不安装组件，不使用日常活动数据库，也不删除验收证据。结果和数据库可能包含本机信息，不要直接上传。
+
+[项目验证技能](.agents/skills/verify/SKILL.md) 说明如何核对证据。此入口只证明采集生命周期，不证明应用切换精度、五分钟空闲、视频例外或完整产品体验。
+
 ## 记录语义和限制
 
 - 只记录实际前台。状态包括 activity、pending、idle、locked、suspended 和 unknown。
